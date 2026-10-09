@@ -1,0 +1,7 @@
+{
+  "name": "vvvEntra Backend",
+  "description": "Backend API server for vvvEntra with auth, user management, and investor onboarding.",
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
