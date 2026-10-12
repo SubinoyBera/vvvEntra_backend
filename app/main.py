@@ -19,11 +19,15 @@ from contextlib import asynccontextmanager
 from sqlalchemy import text
 import asyncio
 
+import app.models  # noqa: F401
+from app.models.base import Base
+
 STARTUP_TIMEOUT_SECONDS = 15
 
 
 async def _check_database() -> None:
-    async with engine.connect() as conn:
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
         await conn.execute(text("SELECT 1"))
 
 async def _warm_up_dependencies(log: structlog.stdlib.BoundLogger) -> None:
