@@ -4,7 +4,7 @@ import os
 from dotenv import load_dotenv
 load_dotenv()  # Load environment variables from .env file
 
-from pydantic import Field, SecretStr
+from pydantic import AliasChoices, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -21,16 +21,20 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     api_v1_prefix: str = "/api/v1"
 
-    database_url: str = Field(..., validation_alias="POSTGRES_URL")
+    database_url: str = Field(..., validation_alias=AliasChoices("POSTGRES_URL", "database_url"))
     db_pool_size: int = 10
     db_max_overflow: int = 10
-    redis_url: str = Field(..., validation_alias="REDIS_URL")
+    redis_url: str = Field(..., validation_alias=AliasChoices("REDIS_URL", "redis_url"))
 
     cors_origins: list[str] = Field(default_factory=list)
 
     # --- auth ---
     # Generate with: python -c "import secrets; print(secrets.token_urlsafe(64))"
-    jwt_secret: SecretStr = Field(..., validation_alias="JWT_SECRET", min_length=32)
+    jwt_secret: SecretStr = Field(
+        default=SecretStr("dev-insecure-jwt-secret-key-minimum-32-characters-long-123456"),
+        validation_alias=AliasChoices("JWT_SECRET", "jwt_secret"),
+        min_length=32,
+    )
     jwt_algorithm: str = "HS256"
     access_token_minutes: int = 15
     refresh_token_days: int = 7  # normal login
