@@ -9,7 +9,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        case_sensitive=False,
+    )
 
     app_name: str = "vventra-api"
     environment: Literal["local", "staging", "production"] = "local"
@@ -25,7 +30,7 @@ class Settings(BaseSettings):
 
     # --- auth ---
     # Generate with: python -c "import secrets; print(secrets.token_urlsafe(64))"
-    jwt_secret: SecretStr = Field(..., min_length=32)
+    jwt_secret: SecretStr = Field(..., validation_alias="JWT_SECRET", min_length=32)
     jwt_algorithm: str = "HS256"
     access_token_minutes: int = 15
     refresh_token_days: int = 7  # normal login
