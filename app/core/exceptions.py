@@ -103,6 +103,7 @@ async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
         status_code=exc.status_code,
         content={
             "error": {"code": exc.code, "message": exc.message},
+            "detail": exc.message,
             "request_id": structlog.contextvars.get_contextvars().get("request_id"),
         },
         headers=headers,
