@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     redis_url: str = Field(..., validation_alias=AliasChoices("REDIS_URL", "redis_url"))
 
     cors_origins: list[str] = Field(default_factory=list)
+    google_client_id: str | None = Field(
+        default=None, validation_alias=AliasChoices("GOOGLE_CLIENT_ID", "google_client_id")
+    )
 
     # --- auth ---
     # Generate with: python -c "import secrets; print(secrets.token_urlsafe(64))"

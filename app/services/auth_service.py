@@ -225,16 +225,60 @@ async def logout(db: AsyncSession, *, raw_token: str | None) -> None:
         await db.commit()
 
 
+_google_jwks_client: Any = None
+
+
+def _get_google_jwks_client() -> Any:
+    global _google_jwks_client
+    if _google_jwks_client is None:
+        try:
+            from jwt import PyJWKClient
+            _google_jwks_client = PyJWKClient(
+                "https://www.googleapis.com/oauth2/v3/certs",
+                cache_keys=True,
+                max_cached_keys=16,
+            )
+        except Exception:
+            _google_jwks_client = False
+    return _google_jwks_client
+
+
 def _verify_google_token_sync(credential: str) -> dict[str, Any]:
+    # 1. Fast Path: Local cryptographic verification using cached Google public keys (0.5ms)
+    if credential.count(".") == 2 and not credential.startswith("ya29."):
+        try:
+            jwks_client = _get_google_jwks_client()
+            if jwks_client:
+                signing_key = jwks_client.get_signing_key_from_jwt(credential)
+                options = {"verify_aud": bool(settings.google_client_id)}
+                payload = jwt.decode(
+                    credential,
+                    signing_key.key,
+                    algorithms=["RS256"],
+                    audience=settings.google_client_id if settings.google_client_id else None,
+                    issuer=["accounts.google.com", "https://accounts.google.com"],
+                    options=options,
+                )
+                if "email_verified" not in payload and "verified_email" in payload:
+                    payload["email_verified"] = payload["verified_email"]
+                return payload
+        except Exception:
+            pass  # Fallback to Google tokeninfo endpoint if local verification fails or key rotated
+
+    # 2. Network Fallback: Query Google tokeninfo endpoint
     import json
     import urllib.request
     from urllib.parse import quote
 
-    url = f"https://oauth2.googleapis.com/tokeninfo?id_token={quote(credential)}"
+    param = "access_token" if credential.startswith("ya29.") else "id_token"
+    url = f"https://oauth2.googleapis.com/tokeninfo?{param}={quote(credential)}"
     req = urllib.request.Request(url, headers={"User-Agent": "vvvEntra-Backend"})
     try:
-        with urllib.request.urlopen(req, timeout=5) as response:
-            return json.loads(response.read().decode("utf-8"))
+        with urllib.request.urlopen(req, timeout=8) as response:
+            data = json.loads(response.read().decode("utf-8"))
+            if "verified_email" in data and "email_verified" not in data:
+                data["email_verified"] = data["verified_email"]
+            return data
     except Exception as exc:
         raise AppError("Invalid or expired Google authentication token.") from exc
 
