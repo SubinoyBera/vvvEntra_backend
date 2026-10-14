@@ -41,13 +41,23 @@ DbSession = Annotated[AsyncSession, Depends(get_db)]
 
 
 async def get_current_user(
+    request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
     db: DbSession,
 ) -> User:
-    if credentials is None:
+    raw_token: str | None = credentials.credentials if credentials else None
+    if not raw_token:
+        auth_header = request.headers.get("Authorization") or request.headers.get("authorization")
+        if auth_header:
+            raw_token = auth_header.replace("Bearer ", "").replace("bearer ", "").strip()
+        elif "access_token" in request.cookies:
+            raw_token = request.cookies.get("access_token")
+
+    if not raw_token:
         raise NotAuthenticated()
+
     try:
-        payload = decode_access_token(credentials.credentials)
+        payload = decode_access_token(raw_token)
         user_id = uuid.UUID(payload["sub"])
     except jwt.ExpiredSignatureError as exc:
         raise TokenExpired() from exc

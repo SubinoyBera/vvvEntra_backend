@@ -76,8 +76,8 @@ def create_app() -> FastAPI:
         allow_origins=settings.cors_origins,
         allow_credentials=True,  # needed for the httpOnly refresh cookie
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
-        expose_headers=["X-Request-ID"],
+        allow_headers=["*"],
+        expose_headers=["*"],
     )
     app.add_middleware(RequestContextMiddleware)
     app.add_exception_handler(AppError, app_error_handler)  # type: ignore[arg-type]
