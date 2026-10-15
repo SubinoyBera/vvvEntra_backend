@@ -30,6 +30,13 @@ class Settings(BaseSettings):
     google_client_id: str | None = Field(
         default=None, validation_alias=AliasChoices("GOOGLE_CLIENT_ID", "google_client_id")
     )
+    linkedin_client_id: str | None = Field(
+        default=None, validation_alias=AliasChoices("LINKEDIN_CLIENT_ID", "linkedin_client_id")
+    )
+    linkedin_client_secret: SecretStr | None = Field(
+        default=None,
+        validation_alias=AliasChoices("LINKEDIN_CLIENT_SECRET", "linkedin_client_secret"),
+    )
 
     # --- auth ---
     # Generate with: python -c "import secrets; print(secrets.token_urlsafe(64))"
