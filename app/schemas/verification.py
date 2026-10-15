@@ -82,9 +82,11 @@ class PayoutConnectRequest(BaseModel):
 
 
 class PayoutConnectResponse(BaseModel):
+    success: bool = True
+    message: str = "Payout account connected successfully."
     account_id: str
-    onboarding_url: str
-    is_connected: bool = False
+    onboarding_url: str | None = None
+    is_connected: bool = True
 
 
 class VideoVerificationInfo(BaseModel):

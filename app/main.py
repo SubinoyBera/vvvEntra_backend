@@ -28,6 +28,23 @@ STARTUP_TIMEOUT_SECONDS = 15
 async def _check_database() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Auto-heal: Ensure all verification columns exist in Postgres
+        cols = [
+            "ALTER TABLE user_verifications ADD COLUMN IF NOT EXISTS payout_account_id VARCHAR(255);",
+            "ALTER TABLE user_verifications ADD COLUMN IF NOT EXISTS payout_provider VARCHAR(50) DEFAULT 'stripe';",
+            "ALTER TABLE user_verifications ADD COLUMN IF NOT EXISTS payout_bank_name VARCHAR(100);",
+            "ALTER TABLE user_verifications ADD COLUMN IF NOT EXISTS payout_last4 VARCHAR(10);",
+            "ALTER TABLE user_verifications ADD COLUMN IF NOT EXISTS payout_currency VARCHAR(10) DEFAULT 'USD';",
+            "ALTER TABLE user_verifications ADD COLUMN IF NOT EXISTS is_payout_connected BOOLEAN DEFAULT FALSE;",
+            "ALTER TABLE user_verifications ADD COLUMN IF NOT EXISTS payout_connected_at TIMESTAMPTZ;",
+            "ALTER TABLE user_verifications ADD COLUMN IF NOT EXISTS is_video_verified BOOLEAN DEFAULT FALSE;",
+            "ALTER TABLE user_verifications ADD COLUMN IF NOT EXISTS video_verified_at TIMESTAMPTZ;",
+        ]
+        for query in cols:
+            try:
+                await conn.execute(text(query))
+            except Exception:
+                pass
         await conn.execute(text("SELECT 1"))
 
 async def _warm_up_dependencies(log: structlog.stdlib.BoundLogger) -> None:

@@ -51,15 +51,18 @@ async def connect_linkedin_oauth(
     )
 
 
+@router.post("/payout", response_model=PayoutConnectResponse)
 @router.post("/payout/connect", response_model=PayoutConnectResponse)
 async def connect_payout(
-    body: PayoutConnectRequest,
     user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
+    body: PayoutConnectRequest | None = None,
 ) -> PayoutConnectResponse:
-    """Initiates secure payout onboarding with payment partner (Stripe Connect)."""
+    """Connects or initiates secure payout account."""
+    return_url = body.return_url if body else "http://localhost:3000/verify"
+    refresh_url = body.refresh_url if body else "http://localhost:3000/verify"
     return await verification_service.initiate_payout_onboarding(
-        db, user, return_url=body.return_url, refresh_url=body.refresh_url
+        db, user, return_url=return_url, refresh_url=refresh_url
     )
 
 

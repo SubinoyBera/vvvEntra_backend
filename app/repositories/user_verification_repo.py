@@ -14,5 +14,5 @@ async def get_or_create(db: AsyncSession, user_id: uuid.UUID) -> UserVerificatio
     if rec is None:
         rec = UserVerification(user_id=user_id, account_created=True)
         db.add(rec)
-        await db.flush()
+        await db.commit()
     return rec
