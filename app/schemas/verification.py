@@ -56,12 +56,55 @@ class LinkedInInfoOut(BaseModel):
     verified_at: datetime | None = None
 
 
+class PayoutAccountInfo(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    account_id: str | None = None
+    provider: str = "stripe"
+    bank_name: str | None = None
+    last4: str | None = None
+    currency: str | None = "USD"
+    is_connected: bool = False
+    connected_at: datetime | None = None
+
+
+class PayoutConnectRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    return_url: str = Field(
+        default="http://localhost:3000/verify",
+        description="URL to return to after completing Stripe Connect onboarding",
+    )
+    refresh_url: str = Field(
+        default="http://localhost:3000/verify",
+        description="URL to return to if the Stripe Connect link expires",
+    )
+
+
+class PayoutConnectResponse(BaseModel):
+    account_id: str
+    onboarding_url: str
+    is_connected: bool = False
+
+
+class VideoVerificationInfo(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    is_verified: bool = False
+    is_locked: bool = True
+    verified_at: datetime | None = None
+
+
 class VerificationStatusResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    current_step: int  # 1: Account Created, 2: LinkedIn, 3: Verified
+    total_steps: int  # 3 for Investor, 5 for Architect
+    current_step: int  # Active step index
     verifying_as: str  # e.g. "Buyer / Investor" or "Architect / Creator"
     account_created: bool = True
     linkedin: LinkedInInfoOut
+    payout: PayoutAccountInfo | None = None
+    video_verification: VideoVerificationInfo | None = None
     is_fully_verified: bool = False
     user_status: str
+

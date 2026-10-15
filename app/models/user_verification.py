@@ -32,7 +32,24 @@ class UserVerification(TimestampMixin, Base):
     )
     linkedin_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
-    # Step 3: Final verified status
+    # Step 3 (Architect): Payout account (Stripe Connect / Regulated payments partner)
+    payout_account_id: Mapped[str | None] = mapped_column(String(255))
+    payout_provider: Mapped[str | None] = mapped_column(String(50), default="stripe")
+    payout_bank_name: Mapped[str | None] = mapped_column(String(100))
+    payout_last4: Mapped[str | None] = mapped_column(String(10))
+    payout_currency: Mapped[str | None] = mapped_column(String(10), default="USD")
+    is_payout_connected: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false"
+    )
+    payout_connected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    # Step 4 (Architect): Live video verification (2 minutes)
+    is_video_verified: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false"
+    )
+    video_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    # Final verified status
     is_fully_verified: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default="false"
     )

@@ -37,6 +37,14 @@ class Settings(BaseSettings):
         default=None,
         validation_alias=AliasChoices("LINKEDIN_CLIENT_SECRET", "linkedin_client_secret"),
     )
+    stripe_secret_key: SecretStr | None = Field(
+        default=None,
+        validation_alias=AliasChoices("STRIPE_SECRET_KEY", "stripe_secret_key"),
+    )
+    stripe_publishable_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("STRIPE_PUBLISHABLE_KEY", "stripe_publishable_key"),
+    )
 
     # --- auth ---
     # Generate with: python -c "import secrets; print(secrets.token_urlsafe(64))"
@@ -46,7 +54,10 @@ class Settings(BaseSettings):
         min_length=32,
     )
     jwt_algorithm: str = "HS256"
-    access_token_minutes: int = 15
+    access_token_minutes: int = Field(
+        default=60,
+        validation_alias=AliasChoices("ACCESS_TOKEN_MINUTES", "access_token_minutes"),
+    )
     refresh_token_days: int = 7  # normal login
     refresh_token_remember_days: int = 30  # "Keep me signed in" ticked
 
