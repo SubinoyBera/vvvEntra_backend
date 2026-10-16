@@ -1,6 +1,7 @@
 import uuid
+from datetime import datetime
 
-from sqlalchemy import CheckConstraint, ForeignKey, String, Text, text
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, String, Text, text
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -10,7 +11,7 @@ from app.models.types import sql_in, str_enum
 
 
 class InvestorProfile(TimestampMixin, Base):
-    """Answers from the 3-step investor wizard. One row per investor (user_id is the PK)."""
+    """Answers from the 3-step investor wizard + verification. One row per investor (user_id is the PK)."""
 
     __tablename__ = "investor_profiles"
     __table_args__ = (
@@ -27,22 +28,27 @@ class InvestorProfile(TimestampMixin, Base):
     )
 
     # Step 1: "About you" (full name lives on users.full_name)
-    focus: Mapped[str] = mapped_column(String(120))  # "Investment or operating focus"
-    location: Mapped[str] = mapped_column(String(120))  # "City and country", free text
+    focus: Mapped[str | None] = mapped_column(String(120), nullable=True)  # "Investment or operating focus"
+    location: Mapped[str | None] = mapped_column(String(120), nullable=True)  # "City and country", free text
 
-    # Step 2: "Your strengths". Values must be InvestorSector members; validated in the API
-    # layer (Pydantic), not by a DB CHECK, because the chip list is product copy that will
-    # change more often than roles/statuses do.
+    # Step 2: "Your strengths"
     sectors: Mapped[list[str]] = mapped_column(
         ARRAY(String(40)), server_default=text("'{}'")
     )
-    additional_notes: Mapped[str | None] = mapped_column(Text)  # optional field
+    additional_notes: Mapped[str | None] = mapped_column(Text, nullable=True)  # optional field
 
     # Step 3: "Your opportunity"
-    looking_for: Mapped[str] = mapped_column(Text)
-    capital_range: Mapped[InvestorCapitalRange] = mapped_column(
-        str_enum(InvestorCapitalRange, "investor_capital_range", 20)
+    looking_for: Mapped[str | None] = mapped_column(Text, nullable=True)
+    capital_range: Mapped[InvestorCapitalRange | None] = mapped_column(
+        str_enum(InvestorCapitalRange, "investor_capital_range", 20), nullable=True
     )
-    deployment_timeline: Mapped[InvestorDeploymentTimeline] = mapped_column(
-        str_enum(InvestorDeploymentTimeline, "investor_deployment_timeline", 20)
+    deployment_timeline: Mapped[InvestorDeploymentTimeline | None] = mapped_column(
+        str_enum(InvestorDeploymentTimeline, "investor_deployment_timeline", 20), nullable=True
     )
+
+    # Verification: LinkedIn
+    linkedin_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    is_linkedin_verified: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false", nullable=False
+    )
+    linkedin_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

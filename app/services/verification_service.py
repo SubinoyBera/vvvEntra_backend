@@ -4,6 +4,7 @@ import asyncio
 import json
 import urllib.parse
 import urllib.request
+import uuid
 from datetime import UTC, datetime
 from typing import Any
 
@@ -11,9 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.exceptions import AppError
-from app.models.enums import UserRole
+from app.models.enums import UserRole, UserStatus
 from app.models.user import User
-from app.repositories import user_verification_repo
+from app.repositories import architect_profile_repo, investor_profile_repo, user_repo
 from app.schemas.verification import (
     LINKEDIN_URL_REGEX,
     LinkedInInfoOut,
@@ -21,6 +22,7 @@ from app.schemas.verification import (
     PayoutAccountInfo,
     PayoutConnectResponse,
     VerificationStatusResponse,
+    VideoUploadResponse,
     VideoVerificationInfo,
 )
 
@@ -34,60 +36,78 @@ def _get_role_label(role: UserRole) -> str:
 
 
 async def get_verification_status(db: AsyncSession, user: User) -> VerificationStatusResponse:
-    rec = await user_verification_repo.get_or_create(db, user.id)
-    has_linkedin = bool(rec.is_linkedin_verified or rec.linkedin_url)
-
     if user.role == UserRole.ARCHITECT:
+        profile = await architect_profile_repo.get_or_create(db, user.id)
+        has_linkedin = bool(profile.is_linkedin_verified or profile.linkedin_url)
+
         total_steps = 5
         if not has_linkedin:
             current_step = 2
-        elif not rec.is_payout_connected:
+        elif not profile.is_payout_connected:
             current_step = 3
-        elif not rec.is_video_verified:
+        elif not profile.is_video_submitted:
             current_step = 4
         else:
             current_step = 5
 
         payout_info = PayoutAccountInfo(
-            account_id=rec.payout_account_id,
-            provider=rec.payout_provider or "stripe",
-            bank_name=rec.payout_bank_name,
-            last4=rec.payout_last4,
-            currency=rec.payout_currency or "USD",
-            is_connected=rec.is_payout_connected,
-            connected_at=rec.payout_connected_at,
+            account_id=profile.payout_account_id,
+            provider=profile.payout_provider or "stripe",
+            bank_name=profile.payout_bank_name,
+            last4=profile.payout_last4,
+            currency=profile.payout_currency or "USD",
+            is_connected=profile.is_payout_connected,
+            connected_at=profile.payout_connected_at,
         )
+
+        if profile.is_video_verified:
+            video_status = "approved"
+        elif profile.is_video_submitted:
+            video_status = "pending_review"
+        else:
+            video_status = "not_submitted"
+
         video_info = VideoVerificationInfo(
-            is_verified=rec.is_video_verified,
-            is_locked=not rec.is_payout_connected,
-            verified_at=rec.video_verified_at,
+            is_submitted=profile.is_video_submitted,
+            is_verified=profile.is_video_verified,
+            is_locked=not profile.is_payout_connected,
+            status=video_status,
+            submitted_at=profile.video_submitted_at,
+            verified_at=profile.video_verified_at,
+        )
+
+        is_fully_verified = bool(
+            has_linkedin and profile.is_payout_connected and profile.is_video_verified
+        )
+
+        linkedin_info = LinkedInInfoOut(
+            url=profile.linkedin_url,
+            is_verified=profile.is_linkedin_verified,
+            verified_at=profile.linkedin_verified_at,
         )
     else:
         # Investor / Buyer (3 steps: Account created, LinkedIn, Verified)
+        profile = await investor_profile_repo.get_or_create(db, user.id)
+        has_linkedin = bool(profile.is_linkedin_verified or profile.linkedin_url)
+
         total_steps = 3
         current_step = 3 if has_linkedin else 2
         payout_info = None
         video_info = None
+        is_fully_verified = has_linkedin
 
-    is_fully_verified = bool(
-        rec.is_fully_verified
-        or (user.role == UserRole.INVESTOR and has_linkedin)
-        or (user.role == UserRole.ARCHITECT and rec.is_payout_connected and rec.is_video_verified)
-    )
+        linkedin_info = LinkedInInfoOut(
+            url=profile.linkedin_url,
+            is_verified=profile.is_linkedin_verified,
+            verified_at=profile.linkedin_verified_at,
+        )
 
     return VerificationStatusResponse(
         total_steps=total_steps,
         current_step=current_step,
         verifying_as=_get_role_label(user.role),
         account_created=True,
-        linkedin=LinkedInInfoOut(
-            url=rec.linkedin_url,
-            name=rec.linkedin_name,
-            headline=rec.linkedin_headline,
-            picture_url=rec.linkedin_picture_url,
-            is_verified=rec.is_linkedin_verified,
-            verified_at=rec.linkedin_verified_at,
-        ),
+        linkedin=linkedin_info,
         payout=payout_info,
         video_verification=video_info,
         is_fully_verified=is_fully_verified,
@@ -111,12 +131,16 @@ async def verify_and_save_linkedin_url(
     username = extract_linkedin_username(linkedin_url)
     clean_url = f"https://www.linkedin.com/in/{username}"
 
-    rec = await user_verification_repo.get_or_create(db, user.id)
-    rec.linkedin_url = clean_url
-    rec.is_linkedin_verified = True
-    rec.linkedin_verified_at = datetime.now(UTC)
-    rec.is_fully_verified = True
-    rec.verified_at = datetime.now(UTC)
+    if user.role == UserRole.ARCHITECT:
+        profile = await architect_profile_repo.get_or_create(db, user.id)
+        profile.linkedin_url = clean_url
+        profile.is_linkedin_verified = True
+        profile.linkedin_verified_at = datetime.now(UTC)
+    else:
+        inv_profile = await investor_profile_repo.get_or_create(db, user.id)
+        inv_profile.linkedin_url = clean_url
+        inv_profile.is_linkedin_verified = True
+        inv_profile.linkedin_verified_at = datetime.now(UTC)
 
     await db.commit()
     return LinkedInVerifyResponse(
@@ -128,33 +152,14 @@ async def verify_and_save_linkedin_url(
     )
 
 
-async def save_linkedin_url(
-    db: AsyncSession, user: User, linkedin_url: str
-) -> VerificationStatusResponse:
-    rec = await user_verification_repo.get_or_create(db, user.id)
-    rec.linkedin_url = linkedin_url
-
-    # If already verified or URL provided, mark step 2 done
-    if not rec.is_linkedin_verified:
-        rec.updated_at = datetime.now(UTC)
-
-    await db.commit()
-    return await get_verification_status(db, user)
-
-
 def _exchange_linkedin_code_sync(code: str, redirect_uri: str) -> dict[str, Any]:
-    # Mock fallback for dev/testing when testing with a mock code
     if code.startswith("mock_linkedin_") or not settings.linkedin_client_id:
         return {
             "sub": "mock-linkedin-sub-12345",
             "name": "Verified Professional",
-            "headline": "Angel Investor & Strategic Operator",
-            "picture": "https://media.licdn.com/dms/image/default-avatar.png",
             "email": "verified.pro@linkedin.com",
-            "email_verified": True,
         }
 
-    # 1. Exchange authorization code for access token
     token_url = "https://www.linkedin.com/oauth/v2/accessToken"
     client_secret = (
         settings.linkedin_client_secret.get_secret_value()
@@ -191,7 +196,6 @@ def _exchange_linkedin_code_sync(code: str, redirect_uri: str) -> dict[str, Any]
     if not access_token:
         raise AppError("LinkedIn authorization code expired or invalid.")
 
-    # 2. Fetch UserInfo via OpenID Connect (Free official LinkedIn OIDC)
     userinfo_url = "https://api.linkedin.com/v2/userinfo"
     userinfo_req = urllib.request.Request(
         userinfo_url,
@@ -211,24 +215,24 @@ def _exchange_linkedin_code_sync(code: str, redirect_uri: str) -> dict[str, Any]
 async def connect_linkedin_oauth(
     db: AsyncSession, user: User, code: str, redirect_uri: str
 ) -> VerificationStatusResponse:
-    profile = await asyncio.to_thread(_exchange_linkedin_code_sync, code, redirect_uri)
+    oauth_res = await asyncio.to_thread(_exchange_linkedin_code_sync, code, redirect_uri)
+    name = oauth_res.get("name") or "profile"
+    clean_name = name.lower().replace(" ", "-")
+    linkedin_url = f"https://www.linkedin.com/in/{clean_name}"
 
-    rec = await user_verification_repo.get_or_create(db, user.id)
-    rec.linkedin_sub = profile.get("sub")
-    rec.linkedin_name = profile.get("name") or f"{profile.get('given_name', '')} {profile.get('family_name', '')}".strip()
-    rec.linkedin_picture_url = profile.get("picture")
-    rec.linkedin_email = profile.get("email")
-    rec.is_linkedin_verified = True
-    rec.linkedin_verified_at = datetime.now(UTC)
+    if user.role == UserRole.ARCHITECT:
+        profile = await architect_profile_repo.get_or_create(db, user.id)
+        profile.linkedin_url = linkedin_url
+        profile.is_linkedin_verified = True
+        profile.linkedin_verified_at = datetime.now(UTC)
+    else:
+        inv_profile = await investor_profile_repo.get_or_create(db, user.id)
+        inv_profile.linkedin_url = linkedin_url
+        inv_profile.is_linkedin_verified = True
+        inv_profile.linkedin_verified_at = datetime.now(UTC)
 
-    # If the user pasted a URL previously, keep it; otherwise set placeholder
-    if not rec.linkedin_url:
-        clean_name = (rec.linkedin_name or "profile").lower().replace(" ", "-")
-        rec.linkedin_url = f"https://www.linkedin.com/in/{clean_name}"
-
-    # Auto-fill user's full_name if not already present
-    if not user.full_name and rec.linkedin_name:
-        user.full_name = rec.linkedin_name
+    if not user.full_name and oauth_res.get("name"):
+        user.full_name = oauth_res["name"]
 
     await db.commit()
     return await get_verification_status(db, user)
@@ -240,7 +244,7 @@ async def initiate_payout_onboarding(
     if user.role != UserRole.ARCHITECT:
         raise AppError("Payout accounts are only required for Architect/Creator accounts.")
 
-    rec = await user_verification_repo.get_or_create(db, user.id)
+    profile = await architect_profile_repo.get_or_create(db, user.id)
 
     # 1. Production Mode: Stripe Connect API
     stripe_key = (
@@ -248,7 +252,7 @@ async def initiate_payout_onboarding(
     )
     if stripe_key:
         try:
-            account_id = rec.payout_account_id
+            account_id = profile.payout_account_id
             if not account_id:
                 req_data = urllib.parse.urlencode(
                     {
@@ -269,7 +273,7 @@ async def initiate_payout_onboarding(
                 with urllib.request.urlopen(req, timeout=10) as resp:
                     acct_data = json.loads(resp.read().decode("utf-8"))
                     account_id = acct_data["id"]
-                    rec.payout_account_id = account_id
+                    profile.payout_account_id = account_id
                     await db.commit()
 
             link_data = urllib.parse.urlencode(
@@ -293,14 +297,14 @@ async def initiate_payout_onboarding(
                 return PayoutConnectResponse(
                     account_id=account_id,
                     onboarding_url=link_res["url"],
-                    is_connected=rec.is_payout_connected,
+                    is_connected=profile.is_payout_connected,
                 )
         except Exception:
-            pass  # Fallback to dev mode if Stripe keys are invalid or test mode offline
+            pass  # Fallback to dev simulation if Stripe keys are test/offline
 
     # 2. Development Simulation Mode (Instant testing without Stripe credentials)
-    mock_acct_id = rec.payout_account_id or f"acct_mock_{user.id.hex[:12]}"
-    rec.payout_account_id = mock_acct_id
+    mock_acct_id = profile.payout_account_id or f"acct_mock_{user.id.hex[:12]}"
+    profile.payout_account_id = mock_acct_id
     await db.commit()
 
     sep = "&" if "?" in return_url else "?"
@@ -311,7 +315,7 @@ async def initiate_payout_onboarding(
     return PayoutConnectResponse(
         account_id=mock_acct_id,
         onboarding_url=mock_onboarding_url,
-        is_connected=rec.is_payout_connected,
+        is_connected=profile.is_payout_connected,
     )
 
 
@@ -326,15 +330,50 @@ async def confirm_payout_account(
     if user.role != UserRole.ARCHITECT:
         raise AppError("Payout accounts are only applicable for Architect accounts.")
 
-    rec = await user_verification_repo.get_or_create(db, user.id)
-    rec.payout_account_id = account_id or rec.payout_account_id or f"acct_mock_{user.id.hex[:12]}"
-    rec.payout_provider = "stripe"
-    rec.payout_bank_name = bank_name
-    rec.payout_last4 = last4
-    rec.payout_currency = currency
-    rec.is_payout_connected = True
-    rec.payout_connected_at = datetime.now(UTC)
+    profile = await architect_profile_repo.get_or_create(db, user.id)
+    profile.payout_account_id = account_id or profile.payout_account_id or f"acct_mock_{user.id.hex[:12]}"
+    profile.payout_provider = "stripe"
+    profile.payout_bank_name = bank_name
+    profile.payout_last4 = last4
+    profile.payout_currency = currency
+    profile.is_payout_connected = True
+    profile.payout_connected_at = datetime.now(UTC)
 
     await db.commit()
     return await get_verification_status(db, user)
 
+
+async def save_verification_video(
+    db: AsyncSession,
+    user: User,
+    file_data: bytes,
+    content_type: str = "video/webm",
+) -> VideoUploadResponse:
+    if user.role != UserRole.ARCHITECT:
+        raise AppError("Live video verification is required for Architect accounts.")
+
+    if not file_data or len(file_data) < 1000:
+        raise AppError("Video file is empty or corrupted. Please record again.")
+
+    MAX_VIDEO_SIZE = 50 * 1024 * 1024  # 50 MB
+    if len(file_data) > MAX_VIDEO_SIZE:
+        raise AppError("Video exceeds maximum allowed size (50MB).")
+
+    # Store compressed video binary directly in ArchitectProfile.user_video (BYTEA in PostgreSQL)
+    profile = await architect_profile_repo.get_or_create(db, user.id)
+    profile.user_video = file_data
+    profile.user_video_content_type = content_type
+    profile.is_video_submitted = True
+    profile.video_submitted_at = datetime.now(UTC)
+    profile.is_video_verified = False  # Queued for manual evaluation
+
+    await db.commit()
+
+    return VideoUploadResponse(
+        success=True,
+        video_id=str(user.id),
+        file_size_bytes=len(file_data),
+        content_type=content_type,
+        status="pending_review",
+        message="Live video verification uploaded successfully and saved to architect profile.",
+    )

@@ -1,4 +1,5 @@
 import re
+import uuid
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -89,12 +90,64 @@ class PayoutConnectResponse(BaseModel):
     is_connected: bool = True
 
 
+class VideoUploadResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    success: bool = True
+    message: str = "Live video verification uploaded successfully and queued for human review."
+    video_id: str
+    file_size_bytes: int
+    content_type: str
+    status: str = "pending_review"
+
+
+class VideoRequirementsResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    max_duration_seconds: int = 120
+    min_duration_seconds: int = 5
+    max_file_size_bytes: int = 50 * 1024 * 1024
+    allowed_mime_types: list[str] = ["video/webm", "video/mp4"]
+    title: str = "Live Webcam Identity Verification"
+    checklist: list[str] = [
+        "Position yourself in a well-lit room with your face clearly visible",
+        "Enable webcam and microphone when prompted by your browser",
+        "State your full legal name and role as registered on your profile",
+        "Present a valid government-issued photo ID (Passport, Driving License, National ID) clearly in front of the camera",
+        "The video automatically terminates and submits after 2 minutes (120 seconds)",
+    ]
+    instructions: list[str] = [
+        "1. Click 'Start Live Recording' to activate camera preview.",
+        "2. Review framing and audio level before recording commences.",
+        "3. Once recording begins, state your name and display your ID clearly.",
+        "4. Recording will auto-stop and compress at 2:00 minutes, or you may click 'Finish Early' once complete.",
+        "5. The compressed video is stored securely in PostgreSQL BYTEA storage.",
+    ]
+    privacy_notice: str = (
+        "Human Review Only: To safeguard your privacy and sensitive biometric/ID information, "
+        "your recording is never sent to third-party AI APIs or external vision models. "
+        "Only vetted internal compliance officers review submissions manually."
+    )
+
+
+class VideoReviewRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    target_user_id: uuid.UUID | None = None
+    approved: bool
+    rejection_reason: str | None = None
+
+
 class VideoVerificationInfo(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
+    is_submitted: bool = False
     is_verified: bool = False
     is_locked: bool = True
+    status: str = "not_submitted"  # "not_submitted", "pending_review", "approved", "rejected"
+    submitted_at: datetime | None = None
     verified_at: datetime | None = None
+    rejection_reason: str | None = None
 
 
 class VerificationStatusResponse(BaseModel):

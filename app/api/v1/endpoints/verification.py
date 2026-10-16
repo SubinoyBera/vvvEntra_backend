@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, File, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.deps import CurrentUser, get_db
@@ -11,6 +11,7 @@ from app.schemas.verification import (
     PayoutConnectRequest,
     PayoutConnectResponse,
     VerificationStatusResponse,
+    VideoUploadResponse,
 )
 from app.services import verification_service
 
@@ -58,7 +59,7 @@ async def connect_payout(
     db: Annotated[AsyncSession, Depends(get_db)],
     body: PayoutConnectRequest | None = None,
 ) -> PayoutConnectResponse:
-    """Connects or initiates secure payout account."""
+    """Connects or initiates secure payout onboarding with Stripe Connect."""
     return_url = body.return_url if body else "http://localhost:3000/verify"
     refresh_url = body.refresh_url if body else "http://localhost:3000/verify"
     return await verification_service.initiate_payout_onboarding(
@@ -73,4 +74,22 @@ async def confirm_payout(
 ) -> VerificationStatusResponse:
     """Confirms payout account is linked and unlocks Step 4 (Video verification)."""
     return await verification_service.confirm_payout_account(db, user)
+
+
+@router.post("/video", response_model=VideoUploadResponse)
+@router.post("/video/upload", response_model=VideoUploadResponse)
+async def upload_verification_video(
+    user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    video: UploadFile = File(...),
+) -> VideoUploadResponse:
+    """Uploads the recorded verification video and saves it directly in PostgreSQL."""
+    file_bytes = await video.read()
+    content_type = video.content_type or "video/webm"
+    return await verification_service.save_verification_video(
+        db,
+        user=user,
+        file_data=file_bytes,
+        content_type=content_type,
+    )
 

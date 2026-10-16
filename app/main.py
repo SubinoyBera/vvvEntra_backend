@@ -28,17 +28,27 @@ STARTUP_TIMEOUT_SECONDS = 15
 async def _check_database() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        # Auto-heal: Ensure all verification columns exist in Postgres
+        # Auto-heal: Ensure all verification, payout, and video columns exist on profiles
         cols = [
-            "ALTER TABLE user_verifications ADD COLUMN IF NOT EXISTS payout_account_id VARCHAR(255);",
-            "ALTER TABLE user_verifications ADD COLUMN IF NOT EXISTS payout_provider VARCHAR(50) DEFAULT 'stripe';",
-            "ALTER TABLE user_verifications ADD COLUMN IF NOT EXISTS payout_bank_name VARCHAR(100);",
-            "ALTER TABLE user_verifications ADD COLUMN IF NOT EXISTS payout_last4 VARCHAR(10);",
-            "ALTER TABLE user_verifications ADD COLUMN IF NOT EXISTS payout_currency VARCHAR(10) DEFAULT 'USD';",
-            "ALTER TABLE user_verifications ADD COLUMN IF NOT EXISTS is_payout_connected BOOLEAN DEFAULT FALSE;",
-            "ALTER TABLE user_verifications ADD COLUMN IF NOT EXISTS payout_connected_at TIMESTAMPTZ;",
-            "ALTER TABLE user_verifications ADD COLUMN IF NOT EXISTS is_video_verified BOOLEAN DEFAULT FALSE;",
-            "ALTER TABLE user_verifications ADD COLUMN IF NOT EXISTS video_verified_at TIMESTAMPTZ;",
+            "ALTER TABLE architect_profiles ADD COLUMN IF NOT EXISTS linkedin_url VARCHAR(500);",
+            "ALTER TABLE architect_profiles ADD COLUMN IF NOT EXISTS is_linkedin_verified BOOLEAN DEFAULT FALSE;",
+            "ALTER TABLE architect_profiles ADD COLUMN IF NOT EXISTS linkedin_verified_at TIMESTAMPTZ;",
+            "ALTER TABLE architect_profiles ADD COLUMN IF NOT EXISTS payout_account_id VARCHAR(255);",
+            "ALTER TABLE architect_profiles ADD COLUMN IF NOT EXISTS payout_provider VARCHAR(50) DEFAULT 'stripe';",
+            "ALTER TABLE architect_profiles ADD COLUMN IF NOT EXISTS payout_bank_name VARCHAR(100);",
+            "ALTER TABLE architect_profiles ADD COLUMN IF NOT EXISTS payout_last4 VARCHAR(10);",
+            "ALTER TABLE architect_profiles ADD COLUMN IF NOT EXISTS payout_currency VARCHAR(10) DEFAULT 'USD';",
+            "ALTER TABLE architect_profiles ADD COLUMN IF NOT EXISTS is_payout_connected BOOLEAN DEFAULT FALSE;",
+            "ALTER TABLE architect_profiles ADD COLUMN IF NOT EXISTS payout_connected_at TIMESTAMPTZ;",
+            "ALTER TABLE architect_profiles ADD COLUMN IF NOT EXISTS user_video BYTEA;",
+            "ALTER TABLE architect_profiles ADD COLUMN IF NOT EXISTS user_video_content_type VARCHAR(50) DEFAULT 'video/webm';",
+            "ALTER TABLE architect_profiles ADD COLUMN IF NOT EXISTS is_video_submitted BOOLEAN DEFAULT FALSE;",
+            "ALTER TABLE architect_profiles ADD COLUMN IF NOT EXISTS video_submitted_at TIMESTAMPTZ;",
+            "ALTER TABLE architect_profiles ADD COLUMN IF NOT EXISTS is_video_verified BOOLEAN DEFAULT FALSE;",
+            "ALTER TABLE architect_profiles ADD COLUMN IF NOT EXISTS video_verified_at TIMESTAMPTZ;",
+            "ALTER TABLE investor_profiles ADD COLUMN IF NOT EXISTS linkedin_url VARCHAR(500);",
+            "ALTER TABLE investor_profiles ADD COLUMN IF NOT EXISTS is_linkedin_verified BOOLEAN DEFAULT FALSE;",
+            "ALTER TABLE investor_profiles ADD COLUMN IF NOT EXISTS linkedin_verified_at TIMESTAMPTZ;",
         ]
         for query in cols:
             try:
