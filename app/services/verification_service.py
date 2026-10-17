@@ -375,5 +375,5 @@ async def save_verification_video(
         file_size_bytes=len(file_data),
         content_type=content_type,
         status="pending_review",
-        message="Live video verification uploaded successfully and saved to architect profile.",
+        message="Live video verification uploaded successfully and queued for human review. Verification process is usually completed within 24 hours.",
     )

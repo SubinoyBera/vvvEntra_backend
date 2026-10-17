@@ -94,7 +94,10 @@ class VideoUploadResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     success: bool = True
-    message: str = "Live video verification uploaded successfully and queued for human review."
+    message: str = (
+        "Live video verification uploaded successfully and queued for human review. "
+        "Verification process is usually completed within 24 hours."
+    )
     video_id: str
     file_size_bytes: int
     content_type: str
