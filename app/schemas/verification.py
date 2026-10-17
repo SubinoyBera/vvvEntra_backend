@@ -141,13 +141,20 @@ class VideoReviewRequest(BaseModel):
     rejection_reason: str | None = None
 
 
+class VideoStatusUpdateRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    status: str = Field(..., description="'Success' to approve, 'Invalid' to reject, or 'False'")
+    rejection_reason: str | None = None
+
+
 class VideoVerificationInfo(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     is_submitted: bool = False
-    is_verified: bool = False
+    is_verified: str = "False"  # "False" | "Success" | "Invalid"
     is_locked: bool = True
-    status: str = "not_submitted"  # "not_submitted", "pending_review", "approved", "rejected"
+    status: str = "not_submitted"  # "not_submitted" | "pending_review" | "Success" | "Invalid"
     submitted_at: datetime | None = None
     verified_at: datetime | None = None
     rejection_reason: str | None = None

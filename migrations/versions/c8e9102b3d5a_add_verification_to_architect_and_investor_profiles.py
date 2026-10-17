@@ -47,7 +47,7 @@ def upgrade() -> None:
     op.add_column('architect_profiles', sa.Column('user_video_content_type', sa.String(length=50), server_default='video/webm', nullable=True))
     op.add_column('architect_profiles', sa.Column('is_video_submitted', sa.Boolean(), server_default='false', nullable=False))
     op.add_column('architect_profiles', sa.Column('video_submitted_at', sa.DateTime(timezone=True), nullable=True))
-    op.add_column('architect_profiles', sa.Column('is_video_verified', sa.Boolean(), server_default='false', nullable=False))
+    op.add_column('architect_profiles', sa.Column('is_video_verified', sa.String(length=20), server_default='False', nullable=False))
     op.add_column('architect_profiles', sa.Column('video_verified_at', sa.DateTime(timezone=True), nullable=True))
 
     # 4. Allow nullable wizard fields on investor_profiles

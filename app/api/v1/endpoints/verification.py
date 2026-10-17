@@ -1,3 +1,4 @@
+import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, UploadFile
@@ -11,6 +12,7 @@ from app.schemas.verification import (
     PayoutConnectRequest,
     PayoutConnectResponse,
     VerificationStatusResponse,
+    VideoStatusUpdateRequest,
     VideoUploadResponse,
 )
 from app.services import verification_service
@@ -91,5 +93,19 @@ async def upload_verification_video(
         user=user,
         file_data=file_bytes,
         content_type=content_type,
+    )
+
+
+@router.patch("/video/{target_user_id}/status", response_model=VerificationStatusResponse)
+@router.post("/video/{target_user_id}/status", response_model=VerificationStatusResponse)
+async def update_video_status(
+    target_user_id: uuid.UUID,
+    body: VideoStatusUpdateRequest,
+    user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> VerificationStatusResponse:
+    """Reviewer updates video verification status to 'Success', 'Invalid', or 'False'."""
+    return await verification_service.update_video_verification_status(
+        db, target_user_id=target_user_id, status=body.status
     )
 

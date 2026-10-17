@@ -77,7 +77,7 @@ class ArchitectProfile(TimestampMixin, Base):
         Boolean, default=False, server_default="false", nullable=False
     )
     video_submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    is_video_verified: Mapped[bool] = mapped_column(
-        Boolean, default=False, server_default="false", nullable=False
+    is_video_verified: Mapped[str] = mapped_column(
+        String(20), default="False", server_default="False", nullable=False
     )
     video_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

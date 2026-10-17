@@ -40,13 +40,18 @@ async def get_verification_status(db: AsyncSession, user: User) -> VerificationS
         profile = await architect_profile_repo.get_or_create(db, user.id)
         has_linkedin = bool(profile.is_linkedin_verified or profile.linkedin_url)
 
+        # Parse string video status ("False" | "Success" | "Invalid")
+        video_verified_val = str(profile.is_video_verified or "False")
+        if video_verified_val not in ("Success", "Invalid", "False"):
+            video_verified_val = "Success" if video_verified_val.lower() in ("true", "1") else "False"
+
         total_steps = 5
         if not has_linkedin:
             current_step = 2
         elif not profile.is_payout_connected:
             current_step = 3
-        elif not profile.is_video_submitted:
-            current_step = 4
+        elif not profile.is_video_submitted or video_verified_val == "Invalid":
+            current_step = 4  # Keep Step 4 open if unsubmitted or rejected
         else:
             current_step = 5
 
@@ -60,8 +65,10 @@ async def get_verification_status(db: AsyncSession, user: User) -> VerificationS
             connected_at=profile.payout_connected_at,
         )
 
-        if profile.is_video_verified:
-            video_status = "approved"
+        if video_verified_val == "Success":
+            video_status = "Success"
+        elif video_verified_val == "Invalid":
+            video_status = "Invalid"
         elif profile.is_video_submitted:
             video_status = "pending_review"
         else:
@@ -69,7 +76,7 @@ async def get_verification_status(db: AsyncSession, user: User) -> VerificationS
 
         video_info = VideoVerificationInfo(
             is_submitted=profile.is_video_submitted,
-            is_verified=profile.is_video_verified,
+            is_verified=video_verified_val,
             is_locked=not profile.is_payout_connected,
             status=video_status,
             submitted_at=profile.video_submitted_at,
@@ -77,8 +84,13 @@ async def get_verification_status(db: AsyncSession, user: User) -> VerificationS
         )
 
         is_fully_verified = bool(
-            has_linkedin and profile.is_payout_connected and profile.is_video_verified
+            has_linkedin and profile.is_payout_connected and video_verified_val == "Success"
         )
+
+        # When the team marks the video "Success", automatically unlock and activate the user's account!
+        if is_fully_verified and user.status != UserStatus.ACTIVE:
+            user.status = UserStatus.ACTIVE
+            await db.commit()
 
         linkedin_info = LinkedInInfoOut(
             url=profile.linkedin_url,
@@ -365,7 +377,7 @@ async def save_verification_video(
     profile.user_video_content_type = content_type
     profile.is_video_submitted = True
     profile.video_submitted_at = datetime.now(UTC)
-    profile.is_video_verified = False  # Queued for manual evaluation
+    profile.is_video_verified = "False"  # Queued for manual evaluation ("False" by default)
 
     await db.commit()
 
@@ -377,3 +389,29 @@ async def save_verification_video(
         status="pending_review",
         message="Live video verification uploaded successfully and queued for human review. Verification process is usually completed within 24 hours.",
     )
+
+
+async def update_video_verification_status(
+    db: AsyncSession,
+    target_user_id: uuid.UUID,
+    status: str,  # "Success" | "Invalid" | "False"
+) -> VerificationStatusResponse:
+    """Used by reviewers/team to set video status to 'Success', 'Invalid', or 'False'."""
+    if status not in ("Success", "Invalid", "False"):
+        raise AppError("Status must be one of: 'Success', 'Invalid', or 'False'.")
+
+    target_user = await user_repo.get_by_id(db, target_user_id)
+    if not target_user:
+        raise AppError("User not found.")
+
+    profile = await architect_profile_repo.get_or_create(db, target_user_id)
+    profile.is_video_verified = status
+    profile.video_verified_at = datetime.now(UTC)
+
+    if status == "Success":
+        target_user.status = UserStatus.ACTIVE
+    elif status == "Invalid":
+        profile.is_video_submitted = False  # Reset submission so user can re-record
+
+    await db.commit()
+    return await get_verification_status(db, target_user)
