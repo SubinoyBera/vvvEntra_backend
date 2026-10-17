@@ -46,9 +46,19 @@ async def _check_database() -> None:
             "ALTER TABLE architect_profiles ADD COLUMN IF NOT EXISTS video_submitted_at TIMESTAMPTZ;",
             "ALTER TABLE architect_profiles ADD COLUMN IF NOT EXISTS is_video_verified BOOLEAN DEFAULT FALSE;",
             "ALTER TABLE architect_profiles ADD COLUMN IF NOT EXISTS video_verified_at TIMESTAMPTZ;",
+            "ALTER TABLE architect_profiles ALTER COLUMN headline DROP NOT NULL;",
+            "ALTER TABLE architect_profiles ALTER COLUMN location DROP NOT NULL;",
+            "ALTER TABLE architect_profiles ALTER COLUMN opportunity_description DROP NOT NULL;",
+            "ALTER TABLE architect_profiles ALTER COLUMN doc_depth DROP NOT NULL;",
+            "ALTER TABLE architect_profiles ALTER COLUMN submission_timeline DROP NOT NULL;",
             "ALTER TABLE investor_profiles ADD COLUMN IF NOT EXISTS linkedin_url VARCHAR(500);",
             "ALTER TABLE investor_profiles ADD COLUMN IF NOT EXISTS is_linkedin_verified BOOLEAN DEFAULT FALSE;",
             "ALTER TABLE investor_profiles ADD COLUMN IF NOT EXISTS linkedin_verified_at TIMESTAMPTZ;",
+            "ALTER TABLE investor_profiles ALTER COLUMN focus DROP NOT NULL;",
+            "ALTER TABLE investor_profiles ALTER COLUMN location DROP NOT NULL;",
+            "ALTER TABLE investor_profiles ALTER COLUMN looking_for DROP NOT NULL;",
+            "ALTER TABLE investor_profiles ALTER COLUMN capital_range DROP NOT NULL;",
+            "ALTER TABLE investor_profiles ALTER COLUMN deployment_timeline DROP NOT NULL;",
         ]
         for query in cols:
             try:
