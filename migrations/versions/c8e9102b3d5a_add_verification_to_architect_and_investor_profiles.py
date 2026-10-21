@@ -50,6 +50,18 @@ def upgrade() -> None:
     op.add_column('architect_profiles', sa.Column('is_video_verified', sa.String(length=20), server_default='False', nullable=False))
     op.add_column('architect_profiles', sa.Column('video_verified_at', sa.DateTime(timezone=True), nullable=True))
 
+    # Extended editable profile fields
+    op.add_column('architect_profiles', sa.Column('user_photo', sa.Text(), nullable=True))
+    op.add_column('architect_profiles', sa.Column('background_image', sa.String(length=255), nullable=True))
+    op.add_column('architect_profiles', sa.Column('about', sa.Text(), nullable=True))
+    op.add_column('architect_profiles', sa.Column('skills', sa.dialects.postgresql.ARRAY(sa.String(length=80)), server_default=sa.text("'{}'"), nullable=False))
+    op.add_column('architect_profiles', sa.Column('languages', sa.JSON(), server_default=sa.text("'[]'"), nullable=True))
+    op.add_column('architect_profiles', sa.Column('market_insight_widgets', sa.dialects.postgresql.ARRAY(sa.String(length=80)), server_default=sa.text("'{}'"), nullable=False))
+    op.add_column('architect_profiles', sa.Column('experience', sa.JSON(), server_default=sa.text("'[]'"), nullable=True))
+    op.add_column('architect_profiles', sa.Column('education', sa.JSON(), server_default=sa.text("'[]'"), nullable=True))
+    op.add_column('architect_profiles', sa.Column('profile_visibility', sa.String(length=20), server_default='Private', nullable=False))
+    op.add_column('architect_profiles', sa.Column('email_notifications', sa.Boolean(), server_default='true', nullable=False))
+
     # 4. Allow nullable wizard fields on investor_profiles
     op.alter_column('investor_profiles', 'focus', nullable=True)
     op.alter_column('investor_profiles', 'location', nullable=True)

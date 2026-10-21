@@ -1,7 +1,8 @@
 import uuid
 from datetime import datetime
+from typing import Any
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, LargeBinary, String, Text, text
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, JSON, LargeBinary, String, Text, text
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -11,7 +12,7 @@ from app.models.types import sql_in, str_enum
 
 
 class ArchitectProfile(TimestampMixin, Base):
-    """Answers from the 3-step architect wizard + verification, payout & video. One row per architect."""
+    """Answers from the 3-step architect wizard + verification, payout, video & full editable profile."""
 
     __tablename__ = "architect_profiles"
     __table_args__ = (
@@ -81,3 +82,29 @@ class ArchitectProfile(TimestampMixin, Base):
         String(20), default="False", server_default="False", nullable=False
     )
     video_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Extended Profile / Edit Profile Fields (Anytime editable)
+    user_photo: Mapped[str | None] = mapped_column(Text, nullable=True)  # Profile photo URL or base64 data
+    background_image: Mapped[str | None] = mapped_column(String(255), nullable=True)  # Gradient or image URL
+    about: Mapped[str | None] = mapped_column(Text, nullable=True)  # Short professional summary
+    skills: Mapped[list[str]] = mapped_column(
+        ARRAY(String(80)), server_default=text("'{}'"), default=list
+    )
+    languages: Mapped[list[dict[str, Any]] | None] = mapped_column(
+        JSON, server_default=text("'[]'"), default=list, nullable=True
+    )
+    market_insight_widgets: Mapped[list[str]] = mapped_column(
+        ARRAY(String(80)), server_default=text("'{}'"), default=list
+    )
+    experience: Mapped[list[dict[str, Any]] | None] = mapped_column(
+        JSON, server_default=text("'[]'"), default=list, nullable=True
+    )
+    education: Mapped[list[dict[str, Any]] | None] = mapped_column(
+        JSON, server_default=text("'[]'"), default=list, nullable=True
+    )
+    profile_visibility: Mapped[str] = mapped_column(
+        String(20), default="Private", server_default="Private", nullable=False
+    )
+    email_notifications: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="true", nullable=False
+    )
