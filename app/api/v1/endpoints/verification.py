@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.deps import CurrentUser, get_db
 from app.schemas.verification import (
+    LinkedInAuthUrlResponse,
     LinkedInOAuthRequest,
     LinkedInUrlRequest,
     LinkedInVerifyResponse,
@@ -40,6 +41,15 @@ async def verify_linkedin_url(
 ) -> LinkedInVerifyResponse:
     """Verifies user's LinkedIn profile URL, saves it, and marks verification complete."""
     return await verification_service.verify_and_save_linkedin_url(db, user, body.linkedin_url)
+
+
+@router.get("/linkedin/auth-url", response_model=LinkedInAuthUrlResponse)
+async def get_linkedin_auth_url(
+    redirect_uri: str = "http://localhost:3000/verify",
+    state: str = "linkedin_verify",
+) -> LinkedInAuthUrlResponse:
+    """Returns official LinkedIn OAuth login URL for 'Sign in with LinkedIn'."""
+    return verification_service.get_linkedin_auth_url(redirect_uri=redirect_uri, state=state)
 
 
 @router.post("/linkedin/connect", response_model=VerificationStatusResponse)

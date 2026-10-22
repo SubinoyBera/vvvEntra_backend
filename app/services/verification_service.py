@@ -17,6 +17,7 @@ from app.models.user import User
 from app.repositories import architect_profile_repo, investor_profile_repo, user_repo
 from app.schemas.verification import (
     LINKEDIN_URL_REGEX,
+    LinkedInAuthUrlResponse,
     LinkedInInfoOut,
     LinkedInVerifyResponse,
     PayoutAccountInfo,
@@ -137,30 +138,46 @@ def extract_linkedin_username(url: str) -> str:
     return match.group(2)
 
 
+def get_linkedin_auth_url(
+    redirect_uri: str = "http://localhost:3000/verify",
+    state: str = "linkedin_verify",
+) -> LinkedInAuthUrlResponse:
+    """Returns the official LinkedIn OAuth login URL for 'Sign in with LinkedIn'."""
+    client_id = settings.linkedin_client_id
+    if not client_id:
+        # Development simulation mode when LinkedIn credentials are not configured
+        sep = "&" if "?" in redirect_uri else "?"
+        mock_auth_url = f"{redirect_uri}{sep}code=mock_linkedin_auth_code_12345&state={state}"
+        return LinkedInAuthUrlResponse(
+            auth_url=mock_auth_url,
+            client_id="mock_client_id",
+            is_mock=True,
+        )
+
+    params = {
+        "response_type": "code",
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "state": state,
+        "scope": "openid profile email",
+    }
+    encoded = urllib.parse.urlencode(params)
+    auth_url = f"https://www.linkedin.com/oauth/v2/authorization?{encoded}"
+    return LinkedInAuthUrlResponse(
+        auth_url=auth_url,
+        client_id=client_id,
+        is_mock=False,
+    )
+
+
 async def verify_and_save_linkedin_url(
     db: AsyncSession, user: User, linkedin_url: str
 ) -> LinkedInVerifyResponse:
-    username = extract_linkedin_username(linkedin_url)
-    clean_url = f"https://www.linkedin.com/in/{username}"
-
-    if user.role == UserRole.ARCHITECT:
-        profile = await architect_profile_repo.get_or_create(db, user.id)
-        profile.linkedin_url = clean_url
-        profile.is_linkedin_verified = True
-        profile.linkedin_verified_at = datetime.now(UTC)
-    else:
-        inv_profile = await investor_profile_repo.get_or_create(db, user.id)
-        inv_profile.linkedin_url = clean_url
-        inv_profile.is_linkedin_verified = True
-        inv_profile.linkedin_verified_at = datetime.now(UTC)
-
-    await db.commit()
-    return LinkedInVerifyResponse(
-        success=True,
-        message="LinkedIn profile verified successfully.",
-        linkedin_url=clean_url,
-        is_verified=True,
-        username=username,
+    """Direct URL pasting is deprecated to eliminate fake profiles.
+    Users must authenticate through the official 'Sign in with LinkedIn' button."""
+    raise AppError(
+        "Direct LinkedIn URL pasting is disabled to guarantee profile authenticity. "
+        "Please click 'Sign in with LinkedIn' to verify your real LinkedIn identity."
     )
 
 
@@ -232,11 +249,15 @@ async def connect_linkedin_oauth(
     clean_name = name.lower().replace(" ", "-")
     linkedin_url = f"https://www.linkedin.com/in/{clean_name}"
 
+    picture = oauth_res.get("picture")
+
     if user.role == UserRole.ARCHITECT:
         profile = await architect_profile_repo.get_or_create(db, user.id)
         profile.linkedin_url = linkedin_url
         profile.is_linkedin_verified = True
         profile.linkedin_verified_at = datetime.now(UTC)
+        if picture and not profile.user_photo:
+            profile.user_photo = picture
     else:
         inv_profile = await investor_profile_repo.get_or_create(db, user.id)
         inv_profile.linkedin_url = linkedin_url

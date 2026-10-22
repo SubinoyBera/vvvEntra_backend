@@ -39,6 +39,14 @@ class LinkedInVerifyResponse(BaseModel):
     username: str | None = None
 
 
+class LinkedInAuthUrlResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    auth_url: str
+    client_id: str | None = None
+    is_mock: bool = False
+
+
 class LinkedInOAuthRequest(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
